@@ -1,6 +1,8 @@
-#include <SFML/Graphics.hpp>
-#include <iostream>
-using namespace std;
+#include "code/pacman.cpp" // Include the Pacman game logic
+
 int main() {
-    cout<<"helloworld"<<endl;
+    // Create a Pacman game object and run the game
+    PacmanGame game;
+    game.run();
+    return 0;
 }
