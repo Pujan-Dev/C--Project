@@ -4,63 +4,18 @@
 #include <cstdlib>
 #include <ctime>
 #include <string>
+#include <cstdlib>
+
+#include "pacman/wallsandpowerups.cpp"
+#include "pacman/enemy.cpp"
+#include "pacman/pacman.cpp"
 
 using namespace sf;
-
-const int TILE_SIZE = 32; // Adjust based on your wall tile size
 
 bool CAN_KILL_ENEMY = false;
 bool GOING_TO_BE_KILLED = false;
 
-class Powerup
-{
-public:
-    Sprite sprite;
 
-    Powerup(Vector2f startPosition)
-    {
-        Texture texture;
-        if (!texture.loadFromFile("pacman-art/other/strawberry.png"))
-        {
-            std::cerr << "Failed to load power-up texture: strawberry.png" << std::endl;
-            return; // Exit constructor if texture fails to load
-        }
-        sprite.setTexture(texture);
-        sprite.setPosition(startPosition);
-        sprite.setScale(0.5f, 0.5f); // Adjust scale as needed
-    }
-};
-
-class Enemy
-{
-public:
-    Sprite sprite;
-    Vector2f velocity;
-
-    Enemy(Texture &texture, Vector2f startPosition, Vector2f startVelocity)
-    {
-        sprite.setTexture(texture);
-        sprite.setPosition(startPosition);
-        velocity = startVelocity;
-    }
-
-    void update()
-    {
-        if (rand() % 100 < 2) // 2% chance to change direction
-        {
-            velocity.x = (rand() % 3 - 1) * 1.0f; // Random x direction (-5, 0, 5)
-            velocity.y = (rand() % 3 - 1) * 1.0f; // Random y direction (-5, 0, 5)
-        }
-        sprite.move(velocity);
-
-        // Keep enemies within the window bounds
-        FloatRect bounds = sprite.getGlobalBounds();
-        if (bounds.left < 0 || bounds.left + bounds.width > 800)
-            velocity.x = -velocity.x;
-        if (bounds.top < 0 || bounds.top + bounds.height > 600)
-            velocity.y = -velocity.y;
-    }
-};
 
 class PacmanGame
 {
@@ -68,7 +23,7 @@ private:
     RenderWindow window;
     Font font;
     Sprite pacman;
-    Vector2f velocity{1.0f, 1.0f};
+    Vector2f velocity{3.0f, 3.0f};
     float currentFrame = 0.0f;
     float animationSpeed = 0.1f;
     std::vector<Texture> pacmanLeftTextures;
@@ -77,9 +32,12 @@ private:
     std::vector<Texture> pacmanDownTextures;
     std::vector<Texture> ghostTextures;
     std::vector<Enemy> enemies;
-    std::vector<Powerup> apple;
-    std::vector<RectangleShape> walls;       // Wall sprites
-    std::vector<std::vector<bool>> wallGrid; // Grid to track walls
+    std::vector<PowerUp> apple;
+    std::vector<Wall> walls;
+
+    bool powerUpActive = false;   // To check if the power-up is active
+    float powerUpDuration = 5.0f; // Duration in seconds
+    Clock powerUpClock;           // SFML clock to track time
 
     void handleEvents()
     {
@@ -90,26 +48,23 @@ private:
                 window.close();
         }
     }
+
     void loadTextures(std::vector<Texture> &textures, const std::string &path, int count)
     {
         for (int i = 1; i <= count; ++i)
         {
             Texture texture;
-            std::string filePath = path + std::to_string(i) + ".png";
-            if (!texture.loadFromFile(filePath))
+            if (!texture.loadFromFile(path + std::to_string(i) + ".png"))
             {
-                std::cerr << "Failed to load " << filePath << std::endl;
+                std::cerr << "Failed to load " << path + std::to_string(i) + ".png" << std::endl;
             }
-            else
-            {
-                std::cout << "Loaded " << filePath << std::endl;
-                textures.push_back(texture);
-            }
+            textures.push_back(texture);
         }
     }
 
     void loadGhostTextures()
     {
+        ghostTextures.clear(); // Clear previous textures
         if (!GOING_TO_BE_KILLED)
         {
             std::vector<std::string> ghostNames = {"blinky", "clyde", "inky", "pinky"};
@@ -128,25 +83,12 @@ private:
             Texture texture;
             if (!texture.loadFromFile("pacman-art/ghosts/blue_ghost.png"))
             {
-                std::cerr << "Failed to load ghost texture: blue.png" << std::endl;
+                std::cerr << "Failed to load ghost texture: blue_ghost.png" << std::endl;
             }
             ghostTextures.push_back(texture);
         }
     }
 
-    void loadWalls()
-    {
-        walls.clear(); // Clear previous walls if any
-
-        // Create a blue rectangle for walls
-        RectangleShape wallShape(Vector2f(TILE_SIZE, TILE_SIZE));
-        wallShape.setFillColor(Color::Blue); // Set the color to blue
-
-        // Example: Add some walls to the grid
-
-        wallShape.setPosition(20 * TILE_SIZE, 10 * TILE_SIZE);
-        walls.push_back(wallShape);
-    }
     void updateAnimation(std::vector<Texture> &textures)
     {
         currentFrame += animationSpeed;
@@ -156,111 +98,170 @@ private:
         }
         pacman.setTexture(textures[static_cast<int>(currentFrame)]);
     }
-
-    Clock powerupClock;
-    bool powerupActive = false;
-    const float POWERUP_DURATION = 5.0f; // 5 seconds
     void update()
     {
- Vector2f movement(0.0f, 0.0f);
+        static int moving_ = -1;          // -1 means no movement
+        static bool isKeyReleased = true; // To track if the key was released
 
+        // Update Pacman's movement and animation when a key is pressed
         if (Keyboard::isKeyPressed(Keyboard::Left) || Keyboard::isKeyPressed(Keyboard::A))
         {
-            movement.x = -velocity.x;
+            pacman.move(-velocity.x, 0);
+            updateAnimation(pacmanLeftTextures);
+            moving_ = 0;
+            isKeyReleased = false;
         }
         else if (Keyboard::isKeyPressed(Keyboard::Right) || Keyboard::isKeyPressed(Keyboard::D))
         {
-            movement.x = velocity.x;
+            pacman.move(velocity.x, 0);
+            updateAnimation(pacmanRightTextures);
+            moving_ = 1;
+            isKeyReleased = false;
         }
         else if (Keyboard::isKeyPressed(Keyboard::Up) || Keyboard::isKeyPressed(Keyboard::W))
         {
-            movement.y = -velocity.y;
+            pacman.move(0, -velocity.y);
+            updateAnimation(pacmanUpTextures);
+            moving_ = 2;
+            isKeyReleased = false;
         }
         else if (Keyboard::isKeyPressed(Keyboard::Down) || Keyboard::isKeyPressed(Keyboard::S))
         {
-            movement.y = velocity.y;
+            pacman.move(0, velocity.y);
+            updateAnimation(pacmanDownTextures);
+            moving_ = 3;
+            isKeyReleased = false;
         }
-
-        if (movement != Vector2f(0.0f, 0.0f))
+        else
         {
-            pacman.move(movement);
-            updateAnimation(pacmanRightTextures); // Adjust based on direction
+            isKeyReleased = true;
         }
-        // Calculate the next position
-        Vector2f nextPosition = pacman.getPosition() + movement;
+    // Check for wall collisions for Pacman
 
-        // Check collision with walls
-        bool collision = false;
-        int gridX = static_cast<int>(nextPosition.x / TILE_SIZE);
-        int gridY = static_cast<int>(nextPosition.y / TILE_SIZE);
 
-        if (gridX >= 0 && gridY >= 0 && gridY < wallGrid.size() && gridX < wallGrid[0].size())
+
+        // Continue moving automatically until a key is released
+        if (isKeyReleased)
         {
-            collision = wallGrid[gridY][gridX];
+            if (moving_ == 0)
+            {
+                pacman.move(-velocity.x, 0);
+                updateAnimation(pacmanLeftTextures);
+            }
+            else if (moving_ == 1)
+            {
+                pacman.move(velocity.x, 0);
+                updateAnimation(pacmanRightTextures);
+            }
+            else if (moving_ == 2)
+            {
+                pacman.move(0, -velocity.y);
+                updateAnimation(pacmanUpTextures);
+            }
+            else if (moving_ == 3)
+            {
+                pacman.move(0, velocity.y);
+                updateAnimation(pacmanDownTextures);
+            }
         }
 
-        if (!collision)
+        // Check if any key was released
+        Event event;
+        while (window.pollEvent(event))
         {
-            pacman.move(movement);
-            updateAnimation(pacmanRightTextures); // Adjust based on direction
+            if (event.type == Event::KeyReleased)
+            {
+                isKeyReleased = true;
+            }
         }
 
-        // Ensure Pac-Man stays within window bounds
+        // Ensure Pacman stays within window bounds
         FloatRect pacmanBounds = pacman.getGlobalBounds();
-        if (pacmanBounds.left < 0)
-            pacman.setPosition(0, pacmanBounds.top);
-        if (pacmanBounds.top < 0)
-            pacman.setPosition(pacmanBounds.left, 0);
-        if (pacmanBounds.left + pacmanBounds.width > 800)
-            pacman.setPosition(800 - pacmanBounds.width, pacmanBounds.top);
-        if (pacmanBounds.top + pacmanBounds.height > 600)
-            pacman.setPosition(pacmanBounds.left, 600 - pacmanBounds.height);
 
+        
+        if (pacmanBounds.left < 0)
+        {
+            pacman.setPosition(0, pacmanBounds.top);
+            moving_ = -1; // Stop movement if hit the left wall
+        }
+        if (pacmanBounds.top < 0)
+        {
+            pacman.setPosition(pacmanBounds.left, 0);
+            moving_ = -1; // Stop movement if hit the top wall
+        }
+        if (pacmanBounds.left + pacmanBounds.width > 800)
+        {
+            pacman.setPosition(800 - pacmanBounds.width, pacmanBounds.top);
+            moving_ = -1; // Stop movement if hit the right wall
+        }
+        if (pacmanBounds.top + pacmanBounds.height > 600)
+        {
+            pacman.setPosition(pacmanBounds.left, 600 - pacmanBounds.height);
+            moving_ = -1; // Stop movement if hit the bottom wall
+        }
+
+        // Update enemies
         for (auto &enemy : enemies)
         {
+            enemy.update();
             FloatRect enemyBounds = enemy.sprite.getGlobalBounds();
-            if (pacmanBounds.intersects(enemyBounds) && powerupActive)
+            if (pacmanBounds.intersects(enemyBounds) && CAN_KILL_ENEMY)
             {
                 enemy.sprite.setPosition(400, 300); // Center of the window (800 x 600)
             }
-            enemy.update();
         }
 
-        for (auto &powerups : apple)
+        // Update power-ups
+        // Update power-ups
+        walls.emplace_back();
+        for (auto &powerup : apple)
         {
-            FloatRect applebox = powerups.sprite.getGlobalBounds();
-            if (pacmanBounds.intersects(applebox))
+            FloatRect appleBounds = powerup.sprite.getGlobalBounds();
+            if (pacmanBounds.intersects(appleBounds))
             {
-                powerups.sprite.setPosition(40, 300); // Example reposition
-                powerupActive = true;
-                powerupClock.restart(); // Reset the power-up timer
+
+                std::srand(std::time(0));
+
+                // Generate a random number between 0 and 800
+                int x = std::rand() % 801;
+
+                // Generate a random number between 0 and 600
+                int y = std::rand() % 601;
+                powerup.sprite.setPosition(x, y); // Reset position
+                CAN_KILL_ENEMY = true;
+                powerUpActive = true;   // Activate the power-up
+                powerUpClock.restart(); // Restart the power-up clock
+                loadGhostTextures();    // Reload ghost textures when power-up is collected
             }
         }
-
-        if (powerupActive && powerupClock.getElapsedTime().asSeconds() > POWERUP_DURATION)
+        // Deactivate the power-up after the duration ends
+        if (powerUpActive && powerUpClock.getElapsedTime().asSeconds() > powerUpDuration)
         {
-            powerupActive = false;
+            CAN_KILL_ENEMY = false;
+            powerUpActive = false;
+            loadGhostTextures(); // Reload ghost textures when power-up effect ends
         }
     }
+
     void render()
     {
         window.clear();
         window.draw(pacman);
+        for (auto &wall : walls)
+        {
+            wall.draw(window);
+        }
 
+        // Draw enemies
         for (const auto &enemy : enemies)
         {
             window.draw(enemy.sprite);
         }
 
+        // Draw power-ups
         for (const auto &powerup : apple)
         {
             window.draw(powerup.sprite);
-        }
-
-        // Draw walls as rectangles
-        for (const auto &wall : walls)
-        {
-            window.draw(wall);
         }
 
         window.display();
@@ -272,27 +273,33 @@ public:
         window.setFramerateLimit(60);
         srand(static_cast<unsigned>(time(nullptr)));
 
+        // Load font
         if (!font.loadFromFile("src/arial.ttf"))
         {
             std::cerr << "Failed to load font!" << std::endl;
         }
 
+        // Load textures for Pacman's animations
         loadTextures(pacmanLeftTextures, "pacman-art/pacman-left/", 3);
         loadTextures(pacmanRightTextures, "pacman-art/pacman-right/", 3);
         loadTextures(pacmanUpTextures, "pacman-art/pacman-up/", 3);
         loadTextures(pacmanDownTextures, "pacman-art/pacman-down/", 3);
 
+        // Load textures for enemies
         loadGhostTextures();
-        loadWalls();
 
+        // Setup Pacman
         pacman.setTexture(pacmanRightTextures[0]);
         pacman.setPosition(400, 300);
 
+        // Setup enemies
         enemies.emplace_back(ghostTextures[0], Vector2f(100, 100), Vector2f(1, 1));
         enemies.emplace_back(ghostTextures[1], Vector2f(200, 200), Vector2f(-1, 1));
         enemies.emplace_back(ghostTextures[2], Vector2f(300, 300), Vector2f(1, -1));
         enemies.emplace_back(ghostTextures[3], Vector2f(400, 400), Vector2f(-1, -1));
-        apple.emplace_back(Vector2f(200, 300));
+
+        // Setup power-ups
+        apple.emplace_back(Vector2f(00, 300));
     }
 
     void run()
@@ -305,3 +312,10 @@ public:
         }
     }
 };
+
+// int main()
+// {
+//     PacmanGame game;
+//     game.run();
+//     return 0;
+// }
