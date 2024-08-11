@@ -1,6 +1,7 @@
 # Ignore Visual Studio Code folder
 .vscode/
-
+.Pacman/
+./home/pujan/cpp_game/pacman-art
 # Ignore all .exe files
 
 

@@ -19,6 +19,22 @@ public:
         sprite.setPosition(startPosition);
     }
 };
+
+
+
+class Pickup
+{
+public:
+    CircleShape shape; // Use CircleShape instead of Sprite
+
+    Pickup(Vector2f startPosition)
+    {
+        shape.setRadius(7.0f);             // Set the radius of the circle
+        shape.setFillColor(Color(255, 165, 0));   // Set the color to orange (RGB: 255, 165, 0)
+        shape.setPosition(startPosition);   // Set the position of the circle
+    }
+};
+
 class Wall
 {
 public:
