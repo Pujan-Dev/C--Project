@@ -14,12 +14,16 @@
 bool GOING_TO_BE_KILLED = false;
 bool CAN_KILL_ENEMY = false;
 int POINTS = 0;
+bool gameWon = false; // Flag to track if the game is won
 
 class PacmanGame
 {
+
 private:
+    Text winMessage; // New variable to display win message
+    float currentScale = 1.0f;
+    bool scalingUp = true;
     RenderWindow window;
-    Font font;
     Sprite pacman;
     Vector2f velocity{3.0f, 3.0f};
     float currentFrame = 0.0f;
@@ -33,11 +37,12 @@ private:
     std::vector<PowerUp> apple;
     std::vector<Pickup> strawberry;
     WallGenerator wallGenerator; // Use WallGenerator for walls
+    Font font;
+    Text scoreText; // Decl      // Set the position on the screen
 
     bool powerUpActive = false;   // To check if the power-up is active
     float powerUpDuration = 5.0f; // Duration in seconds
     Clock powerUpClock;           // SFML clock to track time
-    std::vector<Collectible> collectibles;
 
     void handleEvents()
     {
@@ -99,35 +104,6 @@ private:
         pacman.setTexture(textures[static_cast<int>(currentFrame)]);
     }
 
-void generateCollectibles(std::vector<Collectible> &collectibles, const WallGenerator &wallGenerator, const Vector2f &playerPosition, int count)
-{
-    std::srand(std::time(0));
-
-    for (int i = 0; i < count; ++i)
-    {
-        bool validPosition = false;
-        Vector2f position;
-
-        while (!validPosition)
-        {
-            // Generate random positions within the window
-            float x = static_cast<float>(std::rand() % 800);
-            float y = static_cast<float>(std::rand() % 600);
-            position = Vector2f(x, y);
-
-            Collectible collectible(10.0f, position);
-
-            // Check if this position collides with walls or the player
-            if (!wallGenerator.checkCollision(collectible.getBounds()) &&
-                !FloatRect(playerPosition.x, playerPosition.y, 50, 50).intersects(collectible.getBounds()))
-            {
-                validPosition = true;
-            }
-        }
-
-        collectibles.emplace_back(5.0f, position);
-    }
-}
     Vector2f getRandomPosition(float radius)
     {
         Vector2f position;
@@ -298,16 +274,38 @@ void generateCollectibles(std::vector<Collectible> &collectibles, const WallGene
 
         // Update power-ups
         // (Existing code)
+        // Animate strawberries (pulsing effect)
+        float scaleSpeed = 0.006f; // Speed of scaling
+        float maxScale = 1.2f;     // Maximum scale
+        float minScale = 1.0f;     // Minimum scale
+
+        if (scalingUp)
+        {
+            currentScale += scaleSpeed;
+            if (currentScale >= maxScale)
+                scalingUp = false;
+        }
+        else
+        {
+            currentScale -= scaleSpeed;
+            if (currentScale <= minScale)
+                scalingUp = true;
+        }
 
         for (auto &Pickup : strawberry)
         {
-            FloatRect strawberry_bounds = Pickup.sprite.getGlobalBounds();
+            Pickup.shape.setScale(currentScale, currentScale);
+        }
+        for (auto &Pickup : strawberry)
+        {
+            FloatRect strawberry_bounds = Pickup.shape.getGlobalBounds();
             if (pacmanBounds.intersects(strawberry_bounds))
             {
                 POINTS += 1;
-                Pickup.sprite.setPosition(800, 800);
+                Pickup.shape.setPosition(800, 800);
             }
         }
+        scoreText.setString("Score: " + std::to_string(POINTS));
 
         // Update power-ups
 
@@ -350,18 +348,6 @@ void generateCollectibles(std::vector<Collectible> &collectibles, const WallGene
                 loadGhostTextures();    // Reload ghost textures when power-up is collected
             }
         }
-        for (auto it = collectibles.begin(); it != collectibles.end();)
-        {
-            if (pacman.getGlobalBounds().intersects(it->getBounds()))
-            {
-                POINTS += 10;                // Increase points by 10
-                it = collectibles.erase(it); // Remove the collectible
-            }
-            else
-            {
-                ++it;
-            }
-        }
         // Deactivate the power-up after the duration ends
         if (powerUpActive && powerUpClock.getElapsedTime().asSeconds() > powerUpDuration)
         {
@@ -369,43 +355,60 @@ void generateCollectibles(std::vector<Collectible> &collectibles, const WallGene
             powerUpActive = false;
             loadGhostTextures(); // Reload ghost textures when power-up effect ends
         }
+        scoreText.setString("Score: " + std::to_string(POINTS));
+        // GAME win state
+
+        // Draw win message if game is won
+        if (POINTS == 6)
+        {
+            gameWon = true;
+        }
     }
 
     void render()
     {
-        window.clear();
-        window.draw(pacman);
-        wallGenerator.draw(window); // Draw walls
-
-        // Draw enemies
-        for (const auto &enemy : enemies)
+        if (!gameWon)
         {
-            window.draw(enemy.sprite);
-        }
 
-        // Draw power-ups
-        for (const auto &powerup : apple)
-        {
-            window.draw(powerup.sprite);
-        }
-        for (const auto &Pickup : strawberry)
-        {
-            window.draw(Pickup.sprite);
-        }
+            window.clear();
+            window.draw(pacman);
+            wallGenerator.draw(window); // Draw walls
 
-        // Draw collectibles
-        for (const auto &collectible : collectibles)
-        {
-            collectible.draw(window);
-        }
+            // Draw enemies
+            for (const auto &enemy : enemies)
+            {
+                window.draw(enemy.sprite);
+            }
 
-        window.display();
+            // Draw power-ups
+            for (const auto &powerup : apple)
+            {
+                window.draw(powerup.sprite);
+            }
+            for (const auto &Pickup : strawberry)
+            {
+                window.draw(Pickup.shape);
+            }
+            window.draw(scoreText);
+            window.display();
+        }
+        else
+        {
+            window.clear();
+            window.draw(winMessage);
+            window.display();
+        }
     }
 
 public:
-public:
     PacmanGame() : window(VideoMode(800, 600), "Pacman Game")
     {
+
+        scoreText.setFont(font);
+        scoreText.setString("Score: 0");      // Initial score text
+        scoreText.setCharacterSize(24);       // Text size
+        scoreText.setFillColor(Color::White); // Text color
+        scoreText.setPosition(10, 10);        // Position on the screen
         window.setFramerateLimit(60);
         srand(static_cast<unsigned>(time(nullptr)));
 
@@ -423,12 +426,18 @@ public:
 
         // Load textures for enemies
         loadGhostTextures();
-generateCollectibles(collectibles, wallGenerator, pacman.getPosition(), 500); // 5 collectibles with a radius of 10.0f
 
+        // win state
+        winMessage.setFont(font);
+        winMessage.setString("You Win!");       // Message to display
+        winMessage.setCharacterSize(48);        // Larger text size for visibility
+        winMessage.setFillColor(Color::Yellow); // Color of the text
+        winMessage.setPosition(250, 250);       // Position on the screen
+        winMessage.setScale(1.5f, 1.5f);        // Scale the text if needed
         // Setup Pacman
         pacman.setTexture(pacmanRightTextures[0]);
         pacman.setPosition(400, 500);
-        pacman.setScale(1.20f, 1.20f); // Scale Pacman to twice its original size
+        pacman.setScale(1.750f, 1.750f); // Scale Pacman to twice its original size
 
         // Setup enemies
         enemies.emplace_back(ghostTextures[0], Vector2f(150, 100), Vector2f(1, 1));
@@ -443,18 +452,17 @@ generateCollectibles(collectibles, wallGenerator, pacman.getPosition(), 500); //
         }
 
         // Setup power-ups
-        strawberry.emplace_back(Vector2f(500, 300));
-        for (auto &Pickup : strawberry)
-        {
-            Pickup.sprite.setScale(1.5f, 1.5f);
-        }
+        strawberry.emplace_back(Vector2f(90, 520));
+        strawberry.emplace_back(Vector2f(720, 520));
+        strawberry.emplace_back(Vector2f(720, 80));
+        strawberry.emplace_back(Vector2f(720, 240));
+        strawberry.emplace_back(Vector2f(90, 260));
+        strawberry.emplace_back(Vector2f(90, 80));
 
-        apple.emplace_back(Vector2f(180, 100)); // Position can be randomized
-
-        // Scale apples
-        for (auto &powerup : apple)
+        // Drawing strawberries (red circles)
+        for (const auto &Pickup : strawberry)
         {
-            powerup.sprite.setScale(1.2f, 1.2f); // Scale apples to twice their original size
+            window.draw(Pickup.shape);
         }
 
         // Initialize wall generator
@@ -463,7 +471,7 @@ generateCollectibles(collectibles, wallGenerator, pacman.getPosition(), 500); //
 
     void run()
     {
-        while (window.isOpen())
+        while (window.isOpen()) // Loop runs until the window is closed or game is won
         {
             handleEvents();
             update();

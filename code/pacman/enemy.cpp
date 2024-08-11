@@ -1,3 +1,5 @@
+// #include "global.cpp"
+
 class Enemy
 {
 public:
@@ -6,7 +8,19 @@ public:
 
     Enemy(Texture &texture, Vector2f startPosition, Vector2f startVelocity)
     {
-        sprite.setTexture(texture);
+        // if (GOING_TO_BE_KILLED == false)
+        // {
+            sprite.setTexture(texture);
+        // }/
+        // else
+        // {/
+            // Texture texture;
+            // if (!texture.loadFromFile("pacman-art/ghosts/blue_ghost.png"))
+            // {
+                // std::cerr << "Failed to load ghost texture: .png" << std::endl;
+            // }
+            // sprite.setTexture("../pacman-art/ghosts/blue_ghost.png")
+        // }
         sprite.setPosition(startPosition);
         velocity = startVelocity;
     }
