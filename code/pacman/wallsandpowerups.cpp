@@ -19,6 +19,47 @@ public:
         sprite.setPosition(startPosition);
     }
 };
+class Collectible
+{
+public:
+    CircleShape circle;
+
+    Collectible(float radius, const Vector2f &position)
+    {
+        circle.setRadius(radius);
+        circle.setFillColor(Color::Green);
+        circle.setPosition(position);
+        circle.setOrigin(radius, radius); // Center the origin
+    }
+
+    FloatRect getBounds() const
+    {
+        return circle.getGlobalBounds();
+    }
+
+    void draw(RenderWindow &window) const // Marked as const
+    {
+        window.draw(circle);
+    }
+};
+
+
+class Pickup
+{
+public:
+    Sprite sprite;
+    Texture texture;
+    Pickup(Vector2f startposition)
+    {
+        if (!texture.loadFromFile("pacman-art/other/strawberry.png"))
+        {
+            std::cerr << "Failed to load pickup texture" << std::endl;
+        }
+        sprite.setTexture(texture);
+        sprite.setPosition(startposition);
+    }
+};
+
 class Wall
 {
 public:
