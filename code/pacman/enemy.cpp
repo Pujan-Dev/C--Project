@@ -1,5 +1,6 @@
 // #include "global.cpp"
-
+#include <SFML/Graphics.hpp>
+using namespace sf;
 class Enemy
 {
 public:
@@ -8,19 +9,7 @@ public:
 
     Enemy(Texture &texture, Vector2f startPosition, Vector2f startVelocity)
     {
-        // if (GOING_TO_BE_KILLED == false)
-        // {
-            sprite.setTexture(texture);
-        // }/
-        // else
-        // {/
-            // Texture texture;
-            // if (!texture.loadFromFile("pacman-art/ghosts/blue_ghost.png"))
-            // {
-                // std::cerr << "Failed to load ghost texture: .png" << std::endl;
-            // }
-            // sprite.setTexture("../pacman-art/ghosts/blue_ghost.png")
-        // }
+        sprite.setTexture(texture);
         sprite.setPosition(startPosition);
         velocity = startVelocity;
     }

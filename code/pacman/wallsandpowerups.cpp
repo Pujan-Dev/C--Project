@@ -1,6 +1,8 @@
 #include <SFML/Graphics.hpp>
 #include <iostream>
 #include <vector>
+#include <SFML/Audio.hpp>
+
 using namespace sf;
 
 class PowerUp
@@ -20,8 +22,6 @@ public:
     }
 };
 
-
-
 class Pickup
 {
 public:
@@ -29,50 +29,65 @@ public:
 
     Pickup(Vector2f startPosition)
     {
-        shape.setRadius(7.0f);             // Set the radius of the circle
-        shape.setFillColor(Color(255, 165, 0));   // Set the color to orange (RGB: 255, 165, 0)
-        shape.setPosition(startPosition);   // Set the position of the circle
+        shape.setRadius(7.0f);                  // Set the radius of the circle
+        shape.setFillColor(Color(255, 165, 0)); // Set the color to orange (RGB: 255, 165, 0)
+        shape.setPosition(startPosition);       // Set the position of the circle
     }
 };
 
-class Wall
+class Sound_to
 {
 public:
-    std::vector<RectangleShape> walls;
-
-    Wall()
+    // / Global function to play sounds
+    void playSound(const std::string &soundFilePath)
     {
-        // Add multiple walls
-        RectangleShape wall1(Vector2f(200.0f, 20.0f));
-        wall1.setFillColor(Color::Red);
-        wall1.setPosition(300.0f, 150.0f);
-        walls.push_back(wall1);
+        static sf::SoundBuffer buffer;
+        static sf::Sound sound;
 
-        RectangleShape wall2(Vector2f(150.0f, 20.0f));
-        wall2.setFillColor(Color::Red);
-        wall2.setPosition(100.0f, 100.0f);
-        walls.push_back(wall2);
-
-        // Add more walls as needed
-    }
-
-    void draw(RenderWindow &window)
-    {
-        for (auto &wall : walls)
+        if (!buffer.loadFromFile("code/Sounds/eaten.wav"))
         {
-            window.draw(wall);
+            std::cerr << "Failed to load sound: " << soundFilePath << std::endl;
+            exit(11);
         }
-    }
 
-    bool checkCollision(const FloatRect &bounds)
-    {
-        for (auto &wall : walls)
+        sound.setBuffer(buffer);
+        sound.play();
+    } 
+    void background_song(std::string song){
+        static sf::Music music;
+        // choose an random number between 1 and 5 to choose a random background song
+         song = "code/Sounds/background" + song + ".wav";
+        if (!music.openFromFile(song))
         {
-            if (wall.getGlobalBounds().intersects(bounds))
-            {
-                return true;
-            }
+            std::cerr << "Failed to load music" << std::endl;
+            exit(11);
         }
-        return false;
+        music.setLoop(true);
+        music.play();
+    }
+    void background_song(){
+        static sf::Music music;
+        // choose an random number between 1 and 5 to choose a random background song
+        int random = rand() % 5 + 1;
+        std::string song = "code/Sounds/background" + std::to_string(random) + ".wav";
+        if (!music.openFromFile(song))
+        {
+            std::cerr << "Failed to load music" << std::endl;
+            exit(11);
+        }
+        music.setLoop(true);
+        music.play();
+    }
+    void background_song_nonloop(std:: string song){
+        static sf::Music music;
+        // choose an random number between 1 and 5 to choose a random background song
+        int random = rand() % 5 + 1;
+        song = "code/Sounds/background" + song + ".wav";
+        if (!music.openFromFile(song))
+        {
+            std::cerr << "Failed to load music" << std::endl;
+            exit(11);
+        }
+        music.play();
     }
 };

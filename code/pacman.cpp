@@ -5,22 +5,22 @@
 #include <ctime>
 #include <string>
 #include <cstdlib>
+#include <SFML/Audio.hpp>
 
 #include "pacman/wallsandpowerups.cpp"
 #include "pacman/enemy.cpp"
 // #include "pacman/pacman.cpp"
 #include "./pacman/WallGenerator.h" // Include the header for WallGenerator
 
-bool GOING_TO_BE_KILLED = false;
-bool CAN_KILL_ENEMY = false;
-int POINTS = 0;
-bool gameWon = false; // Flag to track if the game is won
-
 class PacmanGame
 {
 
 private:
-    Text winMessage; // New variable to display win message
+    bool GOING_TO_BE_KILLED = false;
+    bool CAN_KILL_ENEMY = false;
+    int POINTS = 0;
+    bool gameWon = false; // Flag to track if the game is won
+    Text winMessage;      // New variable to display win message
     float currentScale = 1.0f;
     bool scalingUp = true;
     RenderWindow window;
@@ -36,6 +36,11 @@ private:
     std::vector<Enemy> enemies;
     std::vector<PowerUp> apple;
     std::vector<Pickup> strawberry;
+    Time elapsedTime; // Time elapsed since the game started
+    Clock timerClock; // SFML clock to track the elapsed time
+    Text timerText;   // Text to display the timer
+
+    Sound_to s;
     WallGenerator wallGenerator; // Use WallGenerator for walls
     Font font;
     Text scoreText; // Decl      // Set the position on the screen
@@ -146,6 +151,12 @@ private:
     }
     void update()
     {
+        elapsedTime = timerClock.getElapsedTime();
+        int seconds = static_cast<int>(elapsedTime.asSeconds());
+        int minutes = seconds / 60;
+        seconds %= 60;
+        timerText.setString("Time: " + std::to_string(minutes) + ":" + (seconds < 10 ? "0" : "") + std::to_string(seconds));
+
         static int moving_ = -1;          // -1 means no movement
         static bool isKeyReleased = true; // To track if the key was released
 
@@ -264,6 +275,25 @@ private:
                 enemy.sprite.setPosition(400, 300); // Center of the window (800 x 600)
             }
 
+            // is the bellow code correct? copilot says it is not correct then what is the correct code?
+            if (enemyBounds.intersects(pacmanBounds) && !CAN_KILL_ENEMY && !GOING_TO_BE_KILLED) // Pacman is killed
+            {
+                pacman.setPosition(400, 500);
+
+                window.clear();
+
+                Text loseMessage;
+                loseMessage.setFont(font);
+                loseMessage.setString("You Lose!");
+                loseMessage.setCharacterSize(48);
+                loseMessage.setFillColor(Color::Yellow);
+                loseMessage.setPosition(250, 250);
+                loseMessage.setScale(1.5f, 1.5f);
+                window.draw(loseMessage);
+                window.display();
+                sleep(sf::seconds(2));
+            }
+
             // Check for collisions between enemy and walls
             if (wallGenerator.checkCollision(enemy.sprite.getGlobalBounds()))
             {
@@ -298,11 +328,18 @@ private:
         }
         for (auto &Pickup : strawberry)
         {
-            FloatRect strawberry_bounds = Pickup.shape.getGlobalBounds();
-            if (pacmanBounds.intersects(strawberry_bounds))
+            FloatRect strawberryBounds = Pickup.shape.getGlobalBounds();
+            if (pacmanBounds.intersects(strawberryBounds))
             {
                 POINTS += 1;
+
                 Pickup.shape.setPosition(800, 800);
+                std::srand(std::time(0));
+
+                CAN_KILL_ENEMY = true;
+                powerUpActive = true; // Activate the power-up
+                powerUpClock.restart();
+                s.playSound("code/Sounds/eaten.wav");
             }
         }
         scoreText.setString("Score: " + std::to_string(POINTS));
@@ -315,32 +352,6 @@ private:
             if (pacmanBounds.intersects(appleBounds))
             {
                 std::srand(std::time(0));
-
-                int x, y;
-                bool collision;
-
-                do
-                {
-                    // Define the spawnable area within the blue walls
-                    int leftMargin = 50;    // Left boundary (x = 50)
-                    int rightMargin = 740;  // Right boundary (x + width = 740)
-                    int topMargin = 50;     // Top boundary (y = 50)
-                    int bottomMargin = 540; // Bottom boundary (y + height = 540)
-
-                    // Adjust the margins considering the size of the apple
-                    int maxX = rightMargin - static_cast<int>(appleBounds.width);
-                    int maxY = bottomMargin - static_cast<int>(appleBounds.height);
-
-                    // Generate random positions within the defined area
-                    x = std::rand() % (maxX - leftMargin + 1) + leftMargin;
-                    y = std::rand() % (maxY - topMargin + 1) + topMargin;
-
-                    powerup.sprite.setPosition(x, y);
-
-                    // Check if the apple collides with any walls
-                    collision = wallGenerator.checkCollision(powerup.sprite.getGlobalBounds());
-
-                } while (collision); // Repeat until no collision with walls
 
                 CAN_KILL_ENEMY = true;
                 powerUpActive = true;   // Activate the power-up
@@ -359,7 +370,7 @@ private:
         // GAME win state
 
         // Draw win message if game is won
-        if (POINTS == 6)
+        if (POINTS == 6 && !gameWon) // Ensure sound plays only once
         {
             gameWon = true;
         }
@@ -367,9 +378,9 @@ private:
 
     void render()
     {
+
         if (!gameWon)
         {
-
             window.clear();
             window.draw(pacman);
             wallGenerator.draw(window); // Draw walls
@@ -389,13 +400,20 @@ private:
             {
                 window.draw(Pickup.shape);
             }
+
+            // Draw timer
+            window.draw(timerText);
+
+            // Draw score
             window.draw(scoreText);
+
             window.display();
         }
         else
         {
             window.clear();
             window.draw(winMessage);
+            window.draw(timerText);
             window.display();
         }
     }
@@ -403,7 +421,13 @@ private:
 public:
     PacmanGame() : window(VideoMode(800, 600), "Pacman Game")
     {
+        s.background_song();
+        timerClock.restart(); // Start the clock
 
+        timerText.setFont(font);
+        timerText.setCharacterSize(24);       // Set the size of the timer text
+        timerText.setFillColor(Color::White); // Set the color of the timer text
+        timerText.setPosition(400, 10);       // Set the position at the top center
         scoreText.setFont(font);
         scoreText.setString("Score: 0");      // Initial score text
         scoreText.setCharacterSize(24);       // Text size
@@ -413,7 +437,7 @@ public:
         srand(static_cast<unsigned>(time(nullptr)));
 
         // Load font
-        if (!font.loadFromFile("src/arial.ttf"))
+        if (!font.loadFromFile("pacman-art/Joystix.TTF"))
         {
             std::cerr << "Failed to load font!" << std::endl;
         }
@@ -467,11 +491,12 @@ public:
 
         // Initialize wall generator
         wallGenerator = WallGenerator();
+        
     }
 
     void run()
     {
-        while (window.isOpen()) // Loop runs until the window is closed or game is won
+        while (window.isOpen())
         {
             handleEvents();
             update();
