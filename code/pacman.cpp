@@ -4,13 +4,61 @@
 #include <cstdlib>
 #include <ctime>
 #include <string>
-#include <cstdlib>
 #include <SFML/Audio.hpp>
+#include <fstream>
 
 #include "pacman/wallsandpowerups.cpp"
 #include "pacman/enemy.cpp"
-// #include "pacman/pacman.cpp"
-#include "./pacman/WallGenerator.h" // Include the header for WallGenerator
+#include "./pacman/WallGenerator.h"
+class Button
+{
+public:
+    static bool renderQuitButton(RenderWindow &window, Font &font)
+    {
+        // Define button properties
+        Text text;
+        RectangleShape buttonShape;
+        Color idleColor = Color(255, 255, 102);
+        Color hoverColor = Color(255, 255, 51);
+        Color activeColor = Color(255, 215, 0);
+
+        // Setup font
+        text.setFont(font);
+        text.setString("Quit");
+        text.setCharacterSize(20);
+        text.setFillColor(Color::Black);
+
+        // Setup button shape
+        buttonShape.setSize(Vector2f(200, 50));
+        buttonShape.setPosition(300, 500);
+        buttonShape.setFillColor(idleColor);
+
+        text.setPosition(300 + (200 / 2.f) - (text.getGlobalBounds().width / 2.f), 500 + (50 / 2.f) - (text.getGlobalBounds().height / 2.f));
+
+        window.draw(buttonShape);
+        window.draw(text);
+
+        // Check if mouse is hovering over the button
+        Vector2f mousePos = window.mapPixelToCoords(Mouse::getPosition(window));
+        if (buttonShape.getGlobalBounds().contains(mousePos))
+        {
+            buttonShape.setFillColor(hoverColor);
+        }
+        else
+        {
+            buttonShape.setFillColor(idleColor);
+        }
+        window.draw(buttonShape);
+        window.draw(text);
+
+        // Handle button press
+        if (Mouse::isButtonPressed(Mouse::Left) && buttonShape.getGlobalBounds().contains(mousePos))
+        {
+            window.close();
+        }
+        return false; // Otherwise, continue the game
+    }
+};
 
 class PacmanGame
 {
@@ -18,6 +66,7 @@ class PacmanGame
 private:
     bool GOING_TO_BE_KILLED = false;
     bool CAN_KILL_ENEMY = false;
+    int TOTAL_LIVES = 3;
     int POINTS = 0;
     bool gameWon = false; // Flag to track if the game is won
     Text winMessage;      // New variable to display win message
@@ -45,9 +94,63 @@ private:
     Font font;
     Text scoreText; // Decl      // Set the position on the screen
 
+    Text livesText;    // Text to display the number of lives
+    Text HIGHEST_TIME; // Text to display the highest time
+
     bool powerUpActive = false;   // To check if the power-up is active
     float powerUpDuration = 5.0f; // Duration in seconds
     Clock powerUpClock;           // SFML clock to track time
+    Text yourtime;
+    // implement file handling in c++
+    void
+    get_text_from_file(Text &highestText)
+    {
+        std::ifstream file("highest_time.txt");
+        if (file.is_open())
+        {
+            std::string line;
+            if (std::getline(file, line))
+            {
+                highestText.setString(line);
+            }
+            else
+            {
+                highestText.setString("Peak Time: 0:00"); // Default value if file is empty
+            }
+            file.close();
+        }
+        else
+        {
+            std::cerr << "Failed to open file!" << std::endl;
+        }
+    }
+
+    void save_text_to_file(const Text &currentText)
+    {
+        std::string newHighScore = currentText.getString();
+
+        std::ifstream file("highest_time.txt");
+        std::string currentHighScore = "Peak Time: 0:00";
+        if (file.is_open())
+        {
+            std::getline(file, currentHighScore);
+            file.close();
+        }
+
+        if (currentHighScore == "Peak Time: 0:00" || newHighScore < currentHighScore)
+        {
+            std::ofstream outFile("highest_time.txt");
+            if (outFile.is_open())
+            {
+                outFile << newHighScore;
+                outFile.close();
+            }
+            else
+            {
+                std::cerr << "Failed to open file for writing!" << std::endl;
+            }
+        }
+    }
 
     void handleEvents()
     {
@@ -149,6 +252,7 @@ private:
 
         return position;
     }
+
     void update()
     {
         elapsedTime = timerClock.getElapsedTime();
@@ -279,19 +383,7 @@ private:
             if (enemyBounds.intersects(pacmanBounds) && !CAN_KILL_ENEMY && !GOING_TO_BE_KILLED) // Pacman is killed
             {
                 pacman.setPosition(400, 500);
-
-                window.clear();
-
-                Text loseMessage;
-                loseMessage.setFont(font);
-                loseMessage.setString("You Lose!");
-                loseMessage.setCharacterSize(48);
-                loseMessage.setFillColor(Color::Yellow);
-                loseMessage.setPosition(250, 250);
-                loseMessage.setScale(1.5f, 1.5f);
-                window.draw(loseMessage);
-                window.display();
-                sleep(sf::seconds(2));
+                TOTAL_LIVES -= 1;
             }
 
             // Check for collisions between enemy and walls
@@ -332,6 +424,7 @@ private:
             if (pacmanBounds.intersects(strawberryBounds))
             {
                 POINTS += 1;
+                yourtime = timerText;
 
                 Pickup.shape.setPosition(800, 800);
                 std::srand(std::time(0));
@@ -343,6 +436,7 @@ private:
             }
         }
         scoreText.setString("Score: " + std::to_string(POINTS));
+        livesText.setString("Lives: " + std::to_string(TOTAL_LIVES));
 
         // Update power-ups
 
@@ -352,6 +446,7 @@ private:
             if (pacmanBounds.intersects(appleBounds))
             {
                 std::srand(std::time(0));
+                yourtime = timerText;
 
                 CAN_KILL_ENEMY = true;
                 powerUpActive = true;   // Activate the power-up
@@ -366,20 +461,26 @@ private:
             powerUpActive = false;
             loadGhostTextures(); // Reload ghost textures when power-up effect ends
         }
-        scoreText.setString("Score: " + std::to_string(POINTS));
+
         // GAME win state
 
         // Draw win message if game is won
-        if (POINTS == 6 && !gameWon) // Ensure sound plays only once
+        if (POINTS == 6) // Ensure sound plays only once
         {
             gameWon = true;
+        }
+
+        if (gameWon)
+        {
+
+            save_text_to_file(timerText);
         }
     }
 
     void render()
     {
 
-        if (!gameWon)
+        if (!gameWon && TOTAL_LIVES > 0)
         {
             window.clear();
             window.draw(pacman);
@@ -406,33 +507,87 @@ private:
 
             // Draw score
             window.draw(scoreText);
+            window.draw(livesText);
+            window.draw(HIGHEST_TIME);
 
+            window.display();
+        }
+        else if (TOTAL_LIVES == 0)
+        {
+            window.clear();
+            Text gameOverText;
+            gameOverText.setFont(font);
+            gameOverText.setString("Game Over!");
+            gameOverText.setCharacterSize(48);
+            gameOverText.setFillColor(Color::Red);
+            gameOverText.setPosition(200, 250);
+            gameOverText.setScale(1.5f, 1.5f);
+            window.draw(gameOverText);
+            // stop all the sound
+            s.background_nosound();
+
+
+            Button::renderQuitButton(window, font);
             window.display();
         }
         else
         {
             window.clear();
+            Button::renderQuitButton(window, font);
+
             window.draw(winMessage);
-            window.draw(timerText);
+            window.draw(HIGHEST_TIME);
+            window.draw(yourtime);
             window.display();
         }
     }
 
+    void setupTextProperties()
+    {
+        timerText.setFont(font);
+        timerText.setCharacterSize(20);
+        timerText.setFillColor(Color::White);
+        timerText.setPosition(350, 10);
+
+        livesText.setFont(font);
+        livesText.setString("Lives: 3");
+        livesText.setCharacterSize(20);
+        livesText.setFillColor(Color::White);
+        livesText.setPosition(10, 10);
+
+        HIGHEST_TIME.setFont(font);
+        HIGHEST_TIME.setString("Peak Time: 0:00");
+        HIGHEST_TIME.setCharacterSize(20);
+        HIGHEST_TIME.setFillColor(Color::White);
+        HIGHEST_TIME.setPosition(600, 10);
+
+        winMessage.setFont(font);
+        winMessage.setString("You Win!");
+        winMessage.setCharacterSize(48);
+        winMessage.setFillColor(Color::Yellow);
+        winMessage.setPosition(250, 250);
+        winMessage.setScale(1.5f, 1.5f);
+
+        scoreText.setFont(font);
+        scoreText.setString("Score: 0");
+        scoreText.setCharacterSize(20);
+        scoreText.setFillColor(Color::White);
+        scoreText.setPosition(350, 570);
+        yourtime.setFont(font);
+        yourtime.setCharacterSize(20);
+        yourtime.setFillColor(Color::White);
+        yourtime.setPosition(350, 570);
+    }
+
 public:
-    PacmanGame() : window(VideoMode(800, 600), "Pacman Game")
+    // pacman takes win as an arg
+    PacmanGame() : window(VideoMode(800, 600), "Pacman Game"), GOING_TO_BE_KILLED(false), CAN_KILL_ENEMY(false), TOTAL_LIVES(3), POINTS(0), gameWon(false)
     {
         s.background_song();
         timerClock.restart(); // Start the clock
 
-        timerText.setFont(font);
-        timerText.setCharacterSize(24);       // Set the size of the timer text
-        timerText.setFillColor(Color::White); // Set the color of the timer text
-        timerText.setPosition(400, 10);       // Set the position at the top center
-        scoreText.setFont(font);
-        scoreText.setString("Score: 0");      // Initial score text
-        scoreText.setCharacterSize(24);       // Text size
-        scoreText.setFillColor(Color::White); // Text color
-        scoreText.setPosition(10, 10);        // Position on the screen
+        setupTextProperties();
+
         window.setFramerateLimit(60);
         srand(static_cast<unsigned>(time(nullptr)));
 
@@ -491,8 +646,21 @@ public:
 
         // Initialize wall generator
         wallGenerator = WallGenerator();
-        
+        try
+        {
+            get_text_from_file(HIGHEST_TIME);
+            throw std::runtime_error("Error: File not found");
+        }
+        catch (const std::exception &e)
+        {
+            std::cerr << e.what() << '\n';
+        }
+        catch (...)
+        {
+            std::cerr << "Error: Unknown exception" << '\n';
+        }
     }
+
 
     void run()
     {

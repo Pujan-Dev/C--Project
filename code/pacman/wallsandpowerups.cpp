@@ -90,4 +90,15 @@ public:
         }
         music.play();
     }
+
+    void background_nosound(){
+        static sf::Music music;
+        std::string song = "code/Sounds/backgroundstop.wav";
+        if (!music.openFromFile(song))
+        {
+            std::cerr << "Failed to load music" << std::endl;
+            exit(11);
+        }
+        music.stop();
+    }
 };
